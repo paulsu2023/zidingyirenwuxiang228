@@ -282,3 +282,19 @@ export const editImage = async (
     throw error;
   }
 };
+
+export const verifyApiKey = async (apiKey: string): Promise<boolean> => {
+  if (!apiKey) return false;
+  const ai = new GoogleGenAI({ apiKey });
+  try {
+    // Generate a tiny piece of content just to verify auth
+    await ai.models.generateContent({
+      model: 'gemini-1.5-flash',
+      contents: "hello"
+    });
+    return true;
+  } catch (e) {
+    console.error("API Key verification failed:", e);
+    return false;
+  }
+};

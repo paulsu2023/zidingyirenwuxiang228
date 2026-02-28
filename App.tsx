@@ -4,7 +4,7 @@ import { ImageUploader } from './components/ImageUploader';
 import { ImageViewer } from './components/ImageViewer';
 import { UploadedImage, AspectRatio, Resolution, GenerationSettings, ModelType } from './types';
 import { GIANT_TEMPLATE_PROMPT, BATHROOM_TEMPLATE_PROMPT, STUDENT_TEMPLATE_PROMPT, SUBWAY_TEMPLATE_PROMPT, BEACH_SELFIE_TEMPLATE_PROMPT, SNOW_TEMPLATE_PROMPT, EMERALD_GODDESS_TEMPLATE_PROMPT, MINI_SEWING_TEMPLATE_PROMPT, BEACH_ROCKS_TEMPLATE_PROMPT, TOURIST_CHECKIN_TEMPLATE_PROMPT, PHONE_DANCE_TEMPLATE_PROMPT, RUNWAY_BUTTERFLY_TEMPLATE_PROMPT, MOUNTAIN_SKI_TEMPLATE_PROMPT, ASPECT_RATIOS, RESOLUTIONS } from './constants';
-import { analyzeAndCreatePrompt, generateImage, editImage, checkApiKey, openApiKeySelector } from './services/geminiService';
+import { analyzeAndCreatePrompt, generateImage, editImage, checkApiKey, openApiKeySelector, verifyApiKey } from './services/geminiService';
 
 const App: React.FC = () => {
     // State for Images
@@ -25,6 +25,8 @@ const App: React.FC = () => {
     });
 
     const [customApiKey, setCustomApiKey] = useState(() => localStorage.getItem('customApiKey') || '');
+    const [apiValid, setApiValid] = useState<boolean | null>(null);
+    const [isVerifying, setIsVerifying] = useState(false);
 
     // Application State
     const [generatedImageUrl, setGeneratedImageUrl] = useState<string | null>(null);
@@ -41,6 +43,23 @@ const App: React.FC = () => {
     useEffect(() => {
         checkApiKey().then(setHasApiKey);
     }, []);
+
+    const handleVerifyApiKey = async () => {
+        if (!customApiKey.trim()) return;
+        setIsVerifying(true);
+        setApiValid(null);
+        try {
+            const isValid = await verifyApiKey(customApiKey);
+            setApiValid(isValid);
+            if (!isValid) alert('API Key 验证失败，请重新输入确保有权限');
+            else alert('API Key 验证成功！');
+        } catch (e) {
+            setApiValid(false);
+            alert('验证中发生错误');
+        } finally {
+            setIsVerifying(false);
+        }
+    };
 
     const handleZoom = useCallback((img: UploadedImage) => {
         setViewingImage(img.previewUrl);
@@ -256,46 +275,7 @@ const App: React.FC = () => {
                     </div>
                 )}
 
-                {/* API Key Input & Model Settings */}
-                <div className="bg-gray-800 p-4 rounded-xl border border-gray-700">
-                    <h3 className="text-sm font-semibold text-gray-300 uppercase tracking-wider mb-3">API & 模型设置</h3>
 
-                    <div className="mb-4">
-                        <label className="block text-xs text-gray-400 mb-1">自定义 Gemini API Key</label>
-                        <input
-                            type="password"
-                            value={customApiKey}
-                            onChange={(e) => {
-                                setCustomApiKey(e.target.value);
-                                localStorage.setItem('customApiKey', e.target.value);
-                            }}
-                            className="w-full bg-gray-900 border border-gray-600 text-gray-200 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2"
-                            placeholder="可在此输入你的API Key"
-                        />
-                    </div>
-
-                    <div>
-                        <label className="block text-xs text-gray-400 mb-2">AI 生成模型</label>
-                        <div className="space-y-2">
-                            {[
-                                { label: 'Banana Pro (Gemini 3 Pro Image)', value: ModelType.BANANA_PRO },
-                                { label: 'Banana 2 (Gemini 3.0 Flash Image)', value: ModelType.BANANA_2 },
-                                { label: 'Banana (Gemini 2.5 Image)', value: ModelType.BANANA },
-                            ].map(m => (
-                                <label key={m.value} className="flex items-center space-x-2 text-sm text-gray-300 cursor-pointer">
-                                    <input
-                                        type="radio"
-                                        value={m.value}
-                                        checked={settings.model === m.value}
-                                        onChange={() => setSettings(s => ({ ...s, model: m.value as ModelType }))}
-                                        className="text-blue-500 bg-gray-900 border-gray-600 focus:ring-blue-500"
-                                    />
-                                    <span>{m.label}</span>
-                                </label>
-                            ))}
-                        </div>
-                    </div>
-                </div>
 
                 {/* Image Uploaders */}
                 <div className="space-y-4">
@@ -362,6 +342,28 @@ const App: React.FC = () => {
                 {/* Configuration */}
                 <div className="space-y-4 pt-4 border-t border-gray-800">
                     <div>
+                        <label className="block text-xs font-semibold text-blue-400 mb-3">AI 生成模型</label>
+                        <div className="space-y-2">
+                            {[
+                                { label: 'Banana Pro (gemini-3-pro-image-preview)', value: ModelType.BANANA_PRO },
+                                { label: 'Banana 2 (gemini-3.0-flash-image)', value: ModelType.BANANA_2 },
+                                { label: 'Banana (gemini-2.5-image)', value: ModelType.BANANA },
+                            ].map(m => (
+                                <label key={m.value} className="flex items-center space-x-2 text-sm text-gray-300 cursor-pointer border border-gray-700 bg-gray-800/50 p-2 rounded-lg hover:bg-gray-800 transition-colors">
+                                    <input
+                                        type="radio"
+                                        value={m.value}
+                                        checked={settings.model === m.value}
+                                        onChange={() => setSettings(s => ({ ...s, model: m.value as ModelType }))}
+                                        className="text-blue-500 bg-gray-900 border-gray-600 focus:ring-blue-500"
+                                    />
+                                    <span className="font-medium">{m.label}</span>
+                                </label>
+                            ))}
+                        </div>
+                    </div>
+
+                    <div>
                         <label className="block text-xs font-semibold text-gray-400 mb-2">画幅比例</label>
                         <div className="grid grid-cols-3 gap-2">
                             {ASPECT_RATIOS.map(ar => (
@@ -406,6 +408,31 @@ const App: React.FC = () => {
 
             {/* Main Area */}
             <main className="flex-1 flex flex-col h-screen relative">
+                {/* Top Header with API Key */}
+                <div className="w-full flex justify-end items-center px-6 py-3 bg-gray-950 border-b border-gray-800 shrink-0">
+                    <div className="flex items-center gap-3">
+                        <span className="text-xs text-gray-400 font-medium">您的 Gemini API Key:</span>
+                        <input
+                            type="password"
+                            value={customApiKey}
+                            onChange={(e) => {
+                                setCustomApiKey(e.target.value);
+                                localStorage.setItem('customApiKey', e.target.value);
+                                setApiValid(null);
+                            }}
+                            className="w-64 bg-gray-900 border border-gray-700 text-gray-200 text-xs rounded-lg px-3 py-1.5 focus:border-blue-500 outline-none"
+                            placeholder="请输入 API Key 以使用生成功能..."
+                        />
+                        <button
+                            onClick={handleVerifyApiKey}
+                            disabled={isVerifying || !customApiKey}
+                            className={`px-4 py-1.5 rounded-lg text-xs font-semibold shadow-md transition-colors ${apiValid === true ? 'bg-green-600/20 text-green-400 border border-green-600/30' : 'bg-blue-600 hover:bg-blue-500 text-white border border-blue-500'} disabled:opacity-50`}
+                        >
+                            {isVerifying ? '验证中...' : (apiValid === true ? '已验证 ✓' : '重新验证')}
+                        </button>
+                    </div>
+                </div>
+
                 {/* Prompt Input Area */}
                 <div className="p-6 bg-gray-900 border-b border-gray-800">
                     <div className="flex justify-between items-center mb-2">
