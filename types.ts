@@ -21,8 +21,8 @@ export enum Resolution {
 
 export enum ModelType {
   BANANA_PRO = 'gemini-3-pro-image-preview',
-  BANANA_2 = 'gemini-3.0-flash-image',
-  BANANA = 'gemini-2.5-image',
+  BANANA_2 = 'gemini-3.1-flash-image-preview',
+  BANANA = 'gemini-2.5-flash-image',
 }
 
 export interface GenerationSettings {

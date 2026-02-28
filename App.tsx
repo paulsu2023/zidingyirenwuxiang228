@@ -346,8 +346,8 @@ const App: React.FC = () => {
                         <div className="space-y-2">
                             {[
                                 { label: 'Banana Pro (gemini-3-pro-image-preview)', value: ModelType.BANANA_PRO },
-                                { label: 'Banana 2 (gemini-3.0-flash-image)', value: ModelType.BANANA_2 },
-                                { label: 'Banana (gemini-2.5-image)', value: ModelType.BANANA },
+                                { label: 'Banana 2 (gemini-3.1-flash-image-preview)', value: ModelType.BANANA_2 },
+                                { label: 'Banana (gemini-2.5-flash-image)', value: ModelType.BANANA },
                             ].map(m => (
                                 <label key={m.value} className="flex items-center space-x-2 text-sm text-gray-300 cursor-pointer border border-gray-700 bg-gray-800/50 p-2 rounded-lg hover:bg-gray-800 transition-colors">
                                     <input
