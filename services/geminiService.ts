@@ -285,16 +285,15 @@ export const editImage = async (
 
 export const verifyApiKey = async (apiKey: string): Promise<boolean> => {
   if (!apiKey) return false;
-  const ai = new GoogleGenAI({ apiKey });
   try {
-    // Generate a tiny piece of content just to verify auth
-    await ai.models.generateContent({
-      model: 'gemini-1.5-flash',
-      contents: "hello"
-    });
-    return true;
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
+    if (response.ok) {
+      return true;
+    }
+    console.error("API Key verification request failed with status:", response.status);
+    return false;
   } catch (e) {
-    console.error("API Key verification failed:", e);
+    console.error("API Key verification network error:", e);
     return false;
   }
 };
