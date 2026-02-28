@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { createRoot } from 'react-dom/client';
 import { ImageUploader } from './components/ImageUploader';
 import { ImageViewer } from './components/ImageViewer';
-import { UploadedImage, AspectRatio, Resolution, GenerationSettings } from './types';
+import { UploadedImage, AspectRatio, Resolution, GenerationSettings, ModelType } from './types';
 import { GIANT_TEMPLATE_PROMPT, BATHROOM_TEMPLATE_PROMPT, STUDENT_TEMPLATE_PROMPT, SUBWAY_TEMPLATE_PROMPT, BEACH_SELFIE_TEMPLATE_PROMPT, SNOW_TEMPLATE_PROMPT, EMERALD_GODDESS_TEMPLATE_PROMPT, MINI_SEWING_TEMPLATE_PROMPT, BEACH_ROCKS_TEMPLATE_PROMPT, TOURIST_CHECKIN_TEMPLATE_PROMPT, PHONE_DANCE_TEMPLATE_PROMPT, RUNWAY_BUTTERFLY_TEMPLATE_PROMPT, MOUNTAIN_SKI_TEMPLATE_PROMPT, ASPECT_RATIOS, RESOLUTIONS } from './constants';
 import { analyzeAndCreatePrompt, generateImage, editImage, checkApiKey, openApiKeySelector } from './services/geminiService';
 
@@ -21,7 +21,10 @@ const App: React.FC = () => {
         aspectRatio: AspectRatio.PORTRAIT,
         resolution: Resolution.R_1K,
         prompt: '', // Additional user instructions
+        model: ModelType.BANANA_PRO, // Default model
     });
+
+    const [customApiKey, setCustomApiKey] = useState(() => localStorage.getItem('customApiKey') || '');
 
     // Application State
     const [generatedImageUrl, setGeneratedImageUrl] = useState<string | null>(null);
@@ -55,9 +58,9 @@ const App: React.FC = () => {
     };
 
     const handleGenerate = async () => {
-        if (!hasApiKey) {
+        if (!hasApiKey && !customApiKey) {
             await handleApiKeySelect();
-            return;
+            if (!hasApiKey && !customApiKey) return;
         }
 
         setIsGenerating(true);
@@ -144,7 +147,8 @@ const App: React.FC = () => {
                 refImages.map(i => i.base64),
                 settings.prompt,
                 baseTemplate,
-                compositionMode === 'giant' // Pass specific flag if needed, currently main logic uses template string
+                compositionMode === 'giant', // Pass specific flag if needed, currently main logic uses template string
+                customApiKey
             );
 
             setStatusMessage('正在调用 Banana Pro (Gemini 3 Image) 生成高精度图像...');
@@ -162,7 +166,9 @@ const App: React.FC = () => {
                 fusedPrompt,
                 settings.resolution,
                 settings.aspectRatio,
-                references
+                references,
+                customApiKey,
+                settings.model
             );
 
             setGeneratedImageUrl(resultImage);
@@ -183,9 +189,9 @@ const App: React.FC = () => {
 
     const handleEdit = async () => {
         if (!generatedImageUrl || !editPrompt) return;
-        if (!hasApiKey) {
+        if (!hasApiKey && !customApiKey) {
             await handleApiKeySelect();
-            return;
+            if (!hasApiKey && !customApiKey) return;
         }
 
         setIsGenerating(true);
@@ -195,7 +201,9 @@ const App: React.FC = () => {
             const resultImage = await editImage(
                 generatedImageUrl,
                 editPrompt,
-                settings.aspectRatio
+                settings.aspectRatio,
+                customApiKey,
+                settings.model
             );
             setGeneratedImageUrl(resultImage);
             setHistory(prev => [resultImage, ...prev]); // Add edited version to history
@@ -235,18 +243,59 @@ const App: React.FC = () => {
                     上传您的照片，Gemini 3.0 Pro 将自动提取人物并将其融合到“巨型人物与微缩城市”的超现实场景中 (Banana Pro 模型生成)。
                 </p>
 
-                {!hasApiKey && (
+                {!hasApiKey && !customApiKey && (
                     <div className="bg-red-900/30 border border-red-800 p-4 rounded-lg">
                         <p className="text-sm text-red-200 mb-2">需要选择付费项目 API Key 才能使用。</p>
                         <button
                             onClick={handleApiKeySelect}
                             className="w-full bg-red-600 hover:bg-red-500 text-white text-sm py-2 px-4 rounded transition-colors"
                         >
-                            选择 API Key
+                            选择内置 API Key
                         </button>
-                        <a href="https://ai.google.dev/gemini-api/docs/billing" target="_blank" className="block mt-2 text-xs text-red-400 underline">了解计费说明</a>
+                        <a href="https://ai.google.dev/gemini-api/docs/billing" target="_blank" className="block mt-2 text-xs text-red-400 underline" rel="noreferrer">了解计费说明</a>
                     </div>
                 )}
+
+                {/* API Key Input & Model Settings */}
+                <div className="bg-gray-800 p-4 rounded-xl border border-gray-700">
+                    <h3 className="text-sm font-semibold text-gray-300 uppercase tracking-wider mb-3">API & 模型设置</h3>
+
+                    <div className="mb-4">
+                        <label className="block text-xs text-gray-400 mb-1">自定义 Gemini API Key</label>
+                        <input
+                            type="password"
+                            value={customApiKey}
+                            onChange={(e) => {
+                                setCustomApiKey(e.target.value);
+                                localStorage.setItem('customApiKey', e.target.value);
+                            }}
+                            className="w-full bg-gray-900 border border-gray-600 text-gray-200 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2"
+                            placeholder="可在此输入你的API Key"
+                        />
+                    </div>
+
+                    <div>
+                        <label className="block text-xs text-gray-400 mb-2">AI 生成模型</label>
+                        <div className="space-y-2">
+                            {[
+                                { label: 'Banana Pro (Gemini 3 Pro Image)', value: ModelType.BANANA_PRO },
+                                { label: 'Banana 2 (Gemini 3.0 Flash Image)', value: ModelType.BANANA_2 },
+                                { label: 'Banana (Gemini 2.5 Image)', value: ModelType.BANANA },
+                            ].map(m => (
+                                <label key={m.value} className="flex items-center space-x-2 text-sm text-gray-300 cursor-pointer">
+                                    <input
+                                        type="radio"
+                                        value={m.value}
+                                        checked={settings.model === m.value}
+                                        onChange={() => setSettings(s => ({ ...s, model: m.value as ModelType }))}
+                                        className="text-blue-500 bg-gray-900 border-gray-600 focus:ring-blue-500"
+                                    />
+                                    <span>{m.label}</span>
+                                </label>
+                            ))}
+                        </div>
+                    </div>
+                </div>
 
                 {/* Image Uploaders */}
                 <div className="space-y-4">
@@ -320,8 +369,8 @@ const App: React.FC = () => {
                                     key={ar.value}
                                     onClick={() => setSettings(s => ({ ...s, aspectRatio: ar.value }))}
                                     className={`px-2 py-2 text-xs rounded border transition-colors ${settings.aspectRatio === ar.value
-                                            ? 'bg-blue-600 border-blue-500 text-white'
-                                            : 'bg-gray-800 border-gray-700 text-gray-400 hover:bg-gray-700'
+                                        ? 'bg-blue-600 border-blue-500 text-white'
+                                        : 'bg-gray-800 border-gray-700 text-gray-400 hover:bg-gray-700'
                                         }`}
                                 >
                                     {ar.label}
@@ -338,8 +387,8 @@ const App: React.FC = () => {
                                     key={res.value}
                                     onClick={() => setSettings(s => ({ ...s, resolution: res.value }))}
                                     className={`px-2 py-2 text-xs rounded border transition-colors ${settings.resolution === res.value
-                                            ? 'bg-purple-600 border-purple-500 text-white'
-                                            : 'bg-gray-800 border-gray-700 text-gray-400 hover:bg-gray-700'
+                                        ? 'bg-purple-600 border-purple-500 text-white'
+                                        : 'bg-gray-800 border-gray-700 text-gray-400 hover:bg-gray-700'
                                         }`}
                                 >
                                     {res.label}
@@ -347,6 +396,11 @@ const App: React.FC = () => {
                             ))}
                         </div>
                     </div>
+                </div>
+
+                {/* Customer Service Footer */}
+                <div className="mt-8 pt-4 border-t border-gray-800 text-center text-xs text-gray-500 pb-4">
+                    <p>有任何问题可以联系微信：<span className="font-bold text-gray-400">amazonfbdeal</span></p>
                 </div>
             </aside>
 
@@ -388,8 +442,8 @@ const App: React.FC = () => {
                         onClick={handleGenerate}
                         disabled={isGenerating}
                         className={`mt-4 w-full py-3 rounded-lg font-bold text-lg tracking-wide shadow-lg transition-all transform hover:scale-[1.01] active:scale-[0.99] flex items-center justify-center gap-2 ${isGenerating
-                                ? 'bg-gray-700 cursor-not-allowed text-gray-400'
-                                : 'bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white'
+                            ? 'bg-gray-700 cursor-not-allowed text-gray-400'
+                            : 'bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white'
                             }`}
                     >
                         {isGenerating ? (

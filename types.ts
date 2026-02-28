@@ -19,10 +19,17 @@ export enum Resolution {
   R_4K = '4K',
 }
 
+export enum ModelType {
+  BANANA_PRO = 'gemini-3-pro-image-preview',
+  BANANA_2 = 'gemini-3.0-flash-image',
+  BANANA = 'gemini-2.5-image',
+}
+
 export interface GenerationSettings {
   aspectRatio: AspectRatio;
   resolution: Resolution;
   prompt: string;
+  model: ModelType;
 }
 
 export type ImageCategory = 'user' | 'scene' | 'reference';

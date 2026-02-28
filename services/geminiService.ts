@@ -31,9 +31,10 @@ export const analyzeAndCreatePrompt = async (
   refImages: string[],
   userPrompt: string,
   baseTemplate: string,
-  isGiantTemplate: boolean = false
+  isGiantTemplate: boolean = false,
+  apiKey: string = ''
 ): Promise<string> => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const ai = new GoogleGenAI({ apiKey: apiKey || process.env.VITE_API_KEY || '' });
 
   // If no inputs are provided, return the base template directly
   if (userImages.length === 0 && sceneImages.length === 0 && refImages.length === 0 && !userPrompt) {
@@ -41,7 +42,7 @@ export const analyzeAndCreatePrompt = async (
   }
 
   const parts: any[] = [];
-  
+
   // Add images with explicit context labels for analysis
   userImages.forEach((img) => {
     parts.push({ inlineData: { mimeType: 'image/png', data: cleanBase64(img) } });
@@ -63,7 +64,7 @@ export const analyzeAndCreatePrompt = async (
 
   // Logic Determination
   const hasReferenceImage = refImages.length > 0;
-  
+
   // 1. Logic if Style Reference is provided (Strict Replacement + Structure Learning)
   const referenceImageLogic = `
     1. **Objective**: Reconstruct the description of the [Style Reference] image, but perform specific SWAPS based on user uploads.
@@ -106,12 +107,12 @@ export const analyzeAndCreatePrompt = async (
     - Avoid terms like "cleavage", "soft tissue volume", "provocative", or overly specific anatomical focus that could trigger safety filters.
 
     **MODE SELECTION**:
-    ${hasReferenceImage ? 
+    ${hasReferenceImage ?
       `>> MODE: STYLE REFERENCE RECONSTRUCTION
        - **Source of Truth**: The [Style Reference] image for Composition/Style.
        - **Source of Truth (Background)**: The [User Scene] image (if provided) for Lighting/Environment.
-       - **Action**: Describe the [Style Reference] structure, but swap the environment with the [User Scene]'s description.` 
-      : 
+       - **Action**: Describe the [Style Reference] structure, but swap the environment with the [User Scene]'s description.`
+      :
       `>> MODE: TEMPLATE FUSION
        - **Source of Truth**: The Base Text Template for Pose/Action/Angle.
        - **Source of Truth (Background)**: The [User Scene] image (if provided) for Lighting/Environment.
@@ -135,7 +136,7 @@ export const analyzeAndCreatePrompt = async (
       contents: { parts },
       config: {
         systemInstruction: systemInstruction,
-        thinkingConfig: { thinkingBudget: 1024 } 
+        thinkingConfig: { thinkingBudget: 1024 }
       }
     });
 
@@ -153,10 +154,12 @@ export const generateImage = async (
   finalPrompt: string,
   resolution: Resolution,
   aspectRatio: AspectRatio,
-  referenceImages: { user?: string, scene?: string, style?: string } = {}
+  referenceImages: { user?: string, scene?: string, style?: string } = {},
+  apiKey: string = '',
+  modelName: string = 'gemini-3-pro-image-preview'
 ): Promise<string> => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-  
+  const ai = new GoogleGenAI({ apiKey: apiKey || process.env.VITE_API_KEY || '' });
+
   const parts: any[] = [];
 
   // 1. Pass User Subject Image
@@ -182,7 +185,7 @@ export const generateImage = async (
 
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-3-pro-image-preview',
+      model: modelName,
       contents: { parts },
       config: {
         imageConfig: {
@@ -194,11 +197,11 @@ export const generateImage = async (
 
     const candidate = response.candidates?.[0];
     if (!candidate) {
-         if (response.promptFeedback) {
-             console.error("Prompt Feedback:", response.promptFeedback);
-             throw new Error("Generation blocked by safety filters.");
-         }
-         throw new Error("No candidates returned from the model.");
+      if (response.promptFeedback) {
+        console.error("Prompt Feedback:", response.promptFeedback);
+        throw new Error("Generation blocked by safety filters.");
+      }
+      throw new Error("No candidates returned from the model.");
     }
 
     // Iterate to find image part
@@ -211,12 +214,12 @@ export const generateImage = async (
     // If no image part, look for text refusal
     const textPart = candidate.content?.parts?.find(p => p.text)?.text;
     if (textPart) {
-        throw new Error(`Model refused to generate image: "${textPart.substring(0, 150)}..."`);
+      throw new Error(`Model refused to generate image: "${textPart.substring(0, 150)}..."`);
     }
 
     // Check finish reason if no content
     if (candidate.finishReason && candidate.finishReason !== 'STOP') {
-        throw new Error(`Generation stopped due to: ${candidate.finishReason}`);
+      throw new Error(`Generation stopped due to: ${candidate.finishReason}`);
     }
 
     throw new Error("No image data received in response");
@@ -232,13 +235,15 @@ export const generateImage = async (
 export const editImage = async (
   originalImageBase64: string,
   editPrompt: string,
-  aspectRatio: AspectRatio
+  aspectRatio: AspectRatio,
+  apiKey: string = '',
+  modelName: string = 'gemini-3-pro-image-preview'
 ): Promise<string> => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const ai = new GoogleGenAI({ apiKey: apiKey || process.env.VITE_API_KEY || '' });
 
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-3-pro-image-preview',
+      model: modelName,
       contents: {
         parts: [
           {
@@ -252,7 +257,7 @@ export const editImage = async (
       },
       config: {
         imageConfig: {
-            aspectRatio: aspectRatio
+          aspectRatio: aspectRatio
         }
       }
     });
@@ -265,10 +270,10 @@ export const editImage = async (
         return `data:image/png;base64,${part.inlineData.data}`;
       }
     }
-    
+
     const textPart = candidate.content?.parts?.find(p => p.text)?.text;
     if (textPart) {
-        throw new Error(`Model refused edit: "${textPart}"`);
+      throw new Error(`Model refused edit: "${textPart}"`);
     }
 
     throw new Error("No edited image received");
